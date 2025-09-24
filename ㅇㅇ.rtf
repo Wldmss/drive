@@ -1,0 +1,45 @@
+{\rtf1\ansi\ansicpg949\cocoartf2761
+\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fswiss\fcharset0 Helvetica;}
+{\colortbl;\red255\green255\blue255;}
+{\*\expandedcolortbl;;}
+\paperw11900\paperh16840\margl1440\margr1440\vieww11520\viewh8400\viewkind0
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural\partightenfactor0
+
+\f0\fs24 \cf0 @echo off\
+SETLOCAL ENABLEDELAYEDEXPANSION\
+\
+REM DB \uc0\u51217 \u49549  \u51221 \u48372 \
+SET HOST=localhost\
+SET PORT=5432\
+SET USER=myuser\
+SET DB=mydb\
+SET SCHEMA=public\
+\
+REM \uc0\u52636 \u47141  \u54260 \u45908 \
+SET OUTDIR=.\\functions_sql\
+IF NOT EXIST "%OUTDIR%" mkdir "%OUTDIR%"\
+\
+REM \uc0\u54632 \u49688  \u47785 \u47197  \u44032 \u51256 \u50724 \u44592 \
+FOR /F "tokens=1,2,3,4 delims=	" %%A IN ('psql -h %HOST% -p %PORT% -U %USER% -d %DB% -At -F "	" -c "SELECT p.oid, n.nspname AS schema, p.proname AS fname, pg_get_function_identity_arguments(p.oid) AS args FROM pg_proc p JOIN pg_namespace n ON p.pronamespace = n.oid WHERE n.nspname = ''%SCHEMA%'';"') DO (\
+    SET OID=%%A\
+    SET SCHEMA_NAME=%%B\
+    SET FUNC_NAME=%%C\
+    SET ARGS=%%D\
+\
+    REM \uc0\u50504 \u51204 \u54620  \u54028 \u51068  \u51060 \u47492  \u49373 \u49457 \
+    SET SAFE_ARGS=!ARGS: =_!\
+    SET SAFE_ARGS=!SAFE_ARGS:,=_!\
+    SET SAFE_ARGS=!SAFE_ARGS:(=_!\
+    SET SAFE_ARGS=!SAFE_ARGS:)=_!\
+\
+    SET FILENAME=%OUTDIR%\\!SCHEMA_NAME!.!FUNC_NAME!_!SAFE_ARGS!.sql\
+\
+    REM \uc0\u54632 \u49688  DDL \u52628 \u52636 \
+    psql -h %HOST% -p %PORT% -U %USER% -d %DB% -At -c "SELECT pg_get_functiondef(!OID!);" > "!FILENAME!"\
+\
+    ECHO Saved: !FILENAME!\
+)\
+\
+ENDLOCAL\
+PAUSE\
+}
