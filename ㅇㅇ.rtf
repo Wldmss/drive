@@ -12,14 +12,23 @@ $user = "myuser"\
 $db = "mydb"\
 $schema = "public"\
 \
-# \uc0\u52636 \u47141  \u54260 \u45908 \
-$outdir = ".\\functions_sql"\
-if (!(Test-Path $outdir)) \{ New-Item -ItemType Directory -Path $outdir \}\
+# \uc0\u52636 \u47141  \u54260 \u45908  (timestamp \u54252 \u54632 )\
+$timestamp = Get-Date -Format "yyyyMMdd_HHmmss"\
+$rootdir = ".\\sql_$timestamp"\
+$funcdir = Join-Path $rootdir "functions"\
+$pkgdir = Join-Path $rootdir "packages"\
+\
+# \uc0\u46356 \u47113 \u53552 \u47532  \u49373 \u49457 \
+foreach ($dir in @($rootdir, $funcdir, $pkgdir)) \{\
+    if (!(Test-Path $dir)) \{ New-Item -ItemType Directory -Path $dir | Out-Null \}\
+\}\
 \
 # PostgreSQL \uc0\u47196 \u44536 \u51064  \u48708 \u48128 \u48264 \u54840  \u51088 \u46041  \u51077 \u47141  (\u49440 \u53469 )\
 # $env:PGPASSWORD = "your_password"\
 \
-# \uc0\u54632 \u49688  \u47785 \u47197  \u44032 \u51256 \u50724 \u44592 \
+######################################################\
+# \uc0\u54632 \u49688  DDL \u52628 \u52636 \
+######################################################\
 $functions = psql -h $host -p $port -U $user -d $db -At -F "`t" -c "\
 SELECT p.oid, n.nspname, p.proname, pg_get_function_identity_arguments(p.oid)\
 FROM pg_proc p\
@@ -34,17 +43,42 @@ foreach ($func in $functions) \{\
     $fname = $parts[2]\
     $args = $parts[3]\
 \
-    # \uc0\u50504 \u51204 \u54620  \u54028 \u51068  \u51060 \u47492  \u49373 \u49457 : \u44277 \u48177 , \u49788 \u54364 , \u44292 \u54840 \u47484  _\
+    # \uc0\u50504 \u51204 \u54620  \u54028 \u51068  \u51060 \u47492  \u49373 \u49457 \
     $safe_args = $args -replace '[ ,()]', '_'\
     if ($safe_args -eq '') \{ $safe_args = 'noargs' \}\
 \
-    $filename = Join-Path $outdir "$schema_name.$fname$($safe_args).sql"\
+    $filename = Join-Path $funcdir "$schema_name.$fname$($safe_args).sql"\
 \
     # \uc0\u54632 \u49688  DDL \u52628 \u52636 \
     psql -h $host -p $port -U $user -d $db -At -c "SELECT pg_get_functiondef($oid);" > $filename\
 \
-    Write-Host "Saved: $filename"\
+    Write-Host "Saved function: $filename"\
 \}\
 \
-Write-Host "All functions exported to $outdir"\
+######################################################\
+# \uc0\u54056 \u53412 \u51648  DDL \u52628 \u52636  (EDB \u51204 \u50857 )\
+######################################################\
+$packages = psql -h $host -p $port -U $user -d $db -At -F "`t" -c "\
+SELECT pkgname, pkgheadsrc, pkgbodysrc\
+FROM edb_package\
+WHERE schemaname = '$schema';\
+"\
+\
+foreach ($pkg in $packages) \{\
+    $parts = $pkg -split "`t",3\
+    $pkgname = $parts[0]\
+    $head = $parts[1]\
+    $body = $parts[2]\
+\
+    # \uc0\u50504 \u51204 \u54620  \u54028 \u51068  \u51060 \u47492 \
+    $safe_name = $pkgname -replace '[^a-zA-Z0-9_]', '_'\
+    $filename = Join-Path $pkgdir "$schema.$safe_name.sql"\
+\
+    # \uc0\u54028 \u51068  \u51200 \u51109  (\u54756 \u45908  + \u48148 \u46356 )\
+    Set-Content -Path $filename -Value "$head`n/`n$body" -Encoding UTF8\
+\
+    Write-Host "Saved package: $filename"\
+\}\
+\
+Write-Host "\uc0\u9989  All functions and packages exported to $rootdir"\
 }
